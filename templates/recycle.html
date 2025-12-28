@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recycle Status - UTXO Recycler</title>
+    <link rel="stylesheet" href="/static/style.css">
+    {% if is_pending %}
+    <meta http-equiv="refresh" content="10">
+    {% endif %}
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><a href="/">UTXO Recycler</a></h1>
+        </header>
+
+        <main>
+            <div class="recycle-status">
+                <div class="status-badge {{ status_class }}">{{ status }}</div>
+
+                <div class="recycle-details">
+                    <div class="detail-row">
+                        <span class="label">Lightning Address:</span>
+                        <span class="value">{{ lightning_address }}</span>
+                    </div>
+
+                    {% if status_class == "status-awaiting" %}
+                    <div class="deposit-section">
+                        <h3>Send your dust UTXOs here:</h3>
+                        <div class="qr-code">
+                            {{ qr_code_svg|safe }}
+                        </div>
+                        <div class="address-display">
+                            <code id="deposit-address">{{ deposit_address }}</code>
+                            <button onclick="copyAddress()" class="copy-btn">Copy</button>
+                        </div>
+                        <p class="warning">Only send to this address once. Additional deposits will be ignored.</p>
+                    </div>
+                    {% endif %}
+
+                    {% if let Some(txid) = deposit_txid %}
+                    <div class="detail-row">
+                        <span class="label">Deposit Transaction:</span>
+                        <span class="value">
+                            <a href="https://mempool.space/tx/{{ txid }}" target="_blank" rel="noopener">
+                                {{ txid|truncate(16) }}...
+                            </a>
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if let Some(amount) = deposit_amount_sats %}
+                    <div class="detail-row">
+                        <span class="label">Deposit Amount:</span>
+                        <span class="value">{{ amount }} sats</span>
+                    </div>
+                    {% endif %}
+
+                    {% if status_class == "status-confirming" %}
+                    <div class="confirmation-progress">
+                        <h3>Waiting for confirmations</h3>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {{ confirmation_percent }}%"></div>
+                        </div>
+                        <p>{{ deposit_confirmations }} / {{ required_confirmations }} confirmations</p>
+                    </div>
+                    {% endif %}
+
+                    {% if let Some(amount) = payout_amount_sats %}
+                    <div class="detail-row">
+                        <span class="label">Payout Amount:</span>
+                        <span class="value highlight">{{ amount }} sats</span>
+                    </div>
+                    {% endif %}
+
+                    {% if let Some(preimage) = payment_preimage %}
+                    <div class="detail-row">
+                        <span class="label">Payment Proof:</span>
+                        <span class="value"><code>{{ preimage|truncate(32) }}...</code></span>
+                    </div>
+                    {% endif %}
+
+                    {% if status_class == "status-paid" %}
+                    <div class="success-message">
+                        <h3>Payment Complete!</h3>
+                        <p>Your Lightning payment has been sent successfully. Thank you for recycling!</p>
+                    </div>
+                    {% endif %}
+
+                    {% if status_class == "status-failed" %}
+                    <div class="error-message">
+                        <h3>Payment Failed</h3>
+                        <p>Unfortunately, the Lightning payment could not be completed. Please contact support.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="actions">
+                <a href="/" class="btn">Recycle More UTXOs</a>
+            </div>
+        </main>
+
+        <footer>
+            <p>UTXO Recycler — Helping Bitcoin scale, one dust UTXO at a time.</p>
+        </footer>
+    </div>
+
+    <script>
+        function copyAddress() {
+            const address = document.getElementById('deposit-address').textContent;
+            navigator.clipboard.writeText(address).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = 'Copy', 2000);
+            });
+        }
+    </script>
+</body>
+</html>

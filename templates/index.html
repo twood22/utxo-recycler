@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTXO Recycler</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>UTXO Recycler</h1>
+            <p class="tagline">Help Bitcoin scale by recycling your dust UTXOs</p>
+        </header>
+
+        <main>
+            <div class="info-box">
+                <h2>How it works</h2>
+                <ol>
+                    <li>Enter your Lightning address below</li>
+                    <li>Send your dust UTXOs to the generated Bitcoin address</li>
+                    <li>Wait for 6 confirmations</li>
+                    <li>Receive <strong>101%</strong> of your deposit via Lightning!</li>
+                </ol>
+            </div>
+
+            <form action="/api/recycle" method="POST" class="recycle-form">
+                <label for="lightning_address">Your Lightning Address</label>
+                <input
+                    type="text"
+                    id="lightning_address"
+                    name="lightning_address"
+                    placeholder="you@getalby.com"
+                    required
+                    pattern="[^@]+@[^@]+\.[^@]+"
+                    title="Please enter a valid lightning address (e.g., user@domain.com)"
+                >
+                <button type="submit">Start Recycling</button>
+            </form>
+
+            <div class="faq">
+                <h3>FAQ</h3>
+                <details>
+                    <summary>What is a dust UTXO?</summary>
+                    <p>A dust UTXO is a very small Bitcoin output that costs more in fees to spend than it's worth. These accumulate over time and bloat the Bitcoin blockchain.</p>
+                </details>
+                <details>
+                    <summary>Why do you pay 101%?</summary>
+                    <p>We're incentivizing users to consolidate their dust UTXOs, which helps reduce the size of Bitcoin's UTXO set and makes the network more efficient for everyone.</p>
+                </details>
+                <details>
+                    <summary>Why 6 confirmations?</summary>
+                    <p>6 confirmations is the standard for considering a Bitcoin transaction final. This protects against double-spend attacks.</p>
+                </details>
+                <details>
+                    <summary>What Lightning wallets work?</summary>
+                    <p>Any wallet that supports Lightning addresses (LNURL-pay), such as Alby, Wallet of Satoshi, Phoenix, Zeus, and many others.</p>
+                </details>
+            </div>
+        </main>
+
+        <footer>
+            <p>UTXO Recycler — Helping Bitcoin scale, one dust UTXO at a time.</p>
+        </footer>
+    </div>
+</body>
+</html>

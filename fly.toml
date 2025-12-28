@@ -1,0 +1,30 @@
+# fly.toml - Fly.io configuration
+# Run `fly launch` to initialize, then `fly deploy` to deploy
+
+app = "utxo-recycler"
+primary_region = "sjc"
+
+[build]
+
+[env]
+  DATABASE_URL = "sqlite:/data/utxo_recycler.db?mode=rwc"
+  ESPLORA_URL = "https://blockstream.info/api"
+  PAYOUT_MULTIPLIER = "1.01"
+  REQUIRED_CONFIRMATIONS = "6"
+  SERVER_HOST = "0.0.0.0"
+  SERVER_PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false  # Keep running for background workers
+  auto_start_machines = true
+  min_machines_running = 1
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
