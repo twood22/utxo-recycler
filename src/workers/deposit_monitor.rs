@@ -4,14 +4,39 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 
+const BASE_INTERVAL_SECS: u64 = 30;
+const MAX_BACKOFF_SECS: u64 = 300; // 5 minutes max
+
 pub async fn run_deposit_monitor(state: Arc<AppState>) {
-    let mut interval = time::interval(Duration::from_secs(30));
+    let mut consecutive_errors: u32 = 0;
 
     loop {
-        interval.tick().await;
+        // Calculate delay with exponential backoff on errors
+        let delay_secs = if consecutive_errors == 0 {
+            BASE_INTERVAL_SECS
+        } else {
+            (BASE_INTERVAL_SECS * 2u64.pow(consecutive_errors.min(4))).min(MAX_BACKOFF_SECS)
+        };
 
-        if let Err(e) = check_deposits(&state).await {
-            tracing::error!("Deposit monitor error: {}", e);
+        time::sleep(Duration::from_secs(delay_secs)).await;
+
+        match check_deposits(&state).await {
+            Ok(_) => {
+                consecutive_errors = 0;
+            }
+            Err(e) => {
+                consecutive_errors += 1;
+                if consecutive_errors <= 2 {
+                    tracing::warn!("Deposit monitor error (will retry): {}", e);
+                } else {
+                    tracing::error!(
+                        "Deposit monitor error (attempt {}, backing off to {}s): {}",
+                        consecutive_errors,
+                        (BASE_INTERVAL_SECS * 2u64.pow(consecutive_errors.min(4))).min(MAX_BACKOFF_SECS),
+                        e
+                    );
+                }
+            }
         }
     }
 }
