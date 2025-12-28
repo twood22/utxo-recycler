@@ -1,7 +1,6 @@
 use anyhow::Result;
-use bdk_esplora::esplora_client::r#async::AsyncClient;
-use bdk_esplora::esplora_client::Builder;
-use bdk_esplora::EsploraAsyncExt;
+use bdk_electrum::electrum_client::{Client, ConfigBuilder, Socks5Config};
+use bdk_electrum::BdkElectrumClient;
 use bdk_wallet::bitcoin::Network;
 use bdk_wallet::{KeychainKind, Wallet};
 use std::sync::Arc;
@@ -9,7 +8,8 @@ use tokio::sync::Mutex;
 
 pub struct BdkWallet {
     wallet: Arc<Mutex<Wallet>>,
-    client: AsyncClient,
+    electrum_url: String,
+    tor_proxy: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,18 +20,36 @@ pub struct DepositInfo {
 }
 
 impl BdkWallet {
-    pub async fn new(descriptor: &str, esplora_url: &str) -> Result<Self> {
+    pub async fn new(descriptor: &str, electrum_url: &str, tor_proxy: Option<String>) -> Result<Self> {
         let wallet = Wallet::create_single(descriptor.to_string())
             .network(Network::Bitcoin)
             .create_wallet_no_persist()?;
 
-        let builder = Builder::new(esplora_url);
-        let client = AsyncClient::from_builder(builder)?;
-
         Ok(Self {
             wallet: Arc::new(Mutex::new(wallet)),
-            client,
+            electrum_url: electrum_url.to_string(),
+            tor_proxy,
         })
+    }
+
+    fn create_client(&self) -> Result<BdkElectrumClient<Client>> {
+        let config = if let Some(ref proxy) = self.tor_proxy {
+            tracing::debug!("Connecting via Tor proxy: {}", proxy);
+            ConfigBuilder::new()
+                .socks5(Some(Socks5Config {
+                    addr: proxy.clone(),
+                    credentials: None,
+                }))
+                .timeout(Some(30))
+                .build()
+        } else {
+            ConfigBuilder::new()
+                .timeout(Some(30))
+                .build()
+        };
+
+        let client = Client::from_config(&self.electrum_url, config)?;
+        Ok(BdkElectrumClient::new(client))
     }
 
     pub async fn get_address(&self, index: u32) -> Result<String> {
@@ -41,22 +59,75 @@ impl BdkWallet {
     }
 
     pub async fn full_scan(&self) -> Result<()> {
-        let mut wallet = self.wallet.lock().await;
+        let electrum_url = self.electrum_url.clone();
+        let tor_proxy = self.tor_proxy.clone();
+        let wallet = self.wallet.clone();
 
-        let request = wallet.start_full_scan();
-        let update = self.client.full_scan(request, 20, 5).await?;
+        // Electrum client is synchronous, so run in blocking task
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let config = if let Some(ref proxy) = tor_proxy {
+                tracing::debug!("Connecting via Tor proxy: {}", proxy);
+                ConfigBuilder::new()
+                    .socks5(Some(Socks5Config {
+                        addr: proxy.clone(),
+                        credentials: None,
+                    }))
+                    .timeout(Some(60))
+                    .build()
+            } else {
+                ConfigBuilder::new()
+                    .timeout(Some(60))
+                    .build()
+            };
 
-        wallet.apply_update(update)?;
+            let client = Client::from_config(&electrum_url, config)?;
+            let electrum_client = BdkElectrumClient::new(client);
+
+            let mut wallet_guard = wallet.blocking_lock();
+            let request = wallet_guard.start_full_scan();
+            let update = electrum_client.full_scan(request, 20, 5, false)?;
+            wallet_guard.apply_update(update)?;
+
+            Ok(())
+        })
+        .await??;
+
         Ok(())
     }
 
     pub async fn sync(&self) -> Result<()> {
-        let mut wallet = self.wallet.lock().await;
+        let electrum_url = self.electrum_url.clone();
+        let tor_proxy = self.tor_proxy.clone();
+        let wallet = self.wallet.clone();
 
-        let request = wallet.start_sync_with_revealed_spks();
-        let update = self.client.sync(request, 5).await?;
+        // Electrum client is synchronous, so run in blocking task
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let config = if let Some(ref proxy) = tor_proxy {
+                ConfigBuilder::new()
+                    .socks5(Some(Socks5Config {
+                        addr: proxy.clone(),
+                        credentials: None,
+                    }))
+                    .timeout(Some(30))
+                    .build()
+            } else {
+                ConfigBuilder::new()
+                    .timeout(Some(30))
+                    .build()
+            };
 
-        wallet.apply_update(update)?;
+            let client = Client::from_config(&electrum_url, config)?;
+            let electrum_client = BdkElectrumClient::new(client);
+
+            let mut wallet_guard = wallet.blocking_lock();
+            let request = wallet_guard.start_sync_with_revealed_spks();
+            let update = electrum_client.sync(request, 5, false)?;
+            wallet_guard.apply_update(update)?;
+
+            Ok(())
+        })
+        .await??;
+
         Ok(())
     }
 

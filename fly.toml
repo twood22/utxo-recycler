@@ -8,7 +8,7 @@ primary_region = "sjc"
 
 [env]
   DATABASE_URL = "sqlite:/data/utxo_recycler.db?mode=rwc"
-  ESPLORA_URL = "https://blockstream.info/api"
+  ELECTRUM_URL = "ssl://electrum.blockstream.info:50002"
   PAYOUT_MULTIPLIER = "1.01"
   REQUIRED_CONFIRMATIONS = "6"
   SERVER_HOST = "0.0.0.0"

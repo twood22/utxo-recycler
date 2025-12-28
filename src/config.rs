@@ -5,7 +5,8 @@ pub struct Config {
     pub database_url: String,
     pub nwc_uri: String,
     pub wallet_descriptor: String,
-    pub esplora_url: String,
+    pub electrum_url: String,
+    pub tor_proxy: Option<String>,
     pub payout_multiplier: f64,
     pub required_confirmations: u32,
     pub server_host: String,
@@ -23,8 +24,9 @@ impl Config {
                 .map_err(|_| anyhow::anyhow!("NWC_URI environment variable required"))?,
             wallet_descriptor: env::var("WALLET_DESCRIPTOR")
                 .map_err(|_| anyhow::anyhow!("WALLET_DESCRIPTOR environment variable required"))?,
-            esplora_url: env::var("ESPLORA_URL")
-                .unwrap_or_else(|_| "https://blockstream.info/api".to_string()),
+            electrum_url: env::var("ELECTRUM_URL")
+                .unwrap_or_else(|_| "ssl://electrum.blockstream.info:50002".to_string()),
+            tor_proxy: env::var("TOR_PROXY").ok(),
             payout_multiplier: env::var("PAYOUT_MULTIPLIER")
                 .unwrap_or_else(|_| "1.01".to_string())
                 .parse()

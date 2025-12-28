@@ -39,7 +39,10 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let config = Config::from_env()?;
     tracing::info!("Configuration loaded");
-    tracing::info!("  - Esplora URL: {}", config.esplora_url);
+    tracing::info!("  - Electrum URL: {}", config.electrum_url);
+    if let Some(ref proxy) = config.tor_proxy {
+        tracing::info!("  - Tor proxy: {}", proxy);
+    }
     tracing::info!("  - Payout multiplier: {}x", config.payout_multiplier);
     tracing::info!("  - Required confirmations: {}", config.required_confirmations);
 
@@ -58,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize BDK wallet
     tracing::info!("Initializing BDK wallet...");
-    let wallet = BdkWallet::new(&config.wallet_descriptor, &config.esplora_url).await?;
+    let wallet = BdkWallet::new(&config.wallet_descriptor, &config.electrum_url, config.tor_proxy.clone()).await?;
 
     // Do initial full scan (non-fatal if it fails - background worker will retry)
     tracing::info!("Performing initial wallet sync (this may take a moment)...");

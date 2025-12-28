@@ -24,12 +24,12 @@ A Bitcoin dust recycling service that accepts small on-chain deposits and pays b
         ▼                                             ▼
 ┌───────────────────┐                    ┌────────────────────┐
 │  Deposit Monitor  │                    │ Payment Processor  │
-│  (BDK + Esplora)  │                    │   (NWC + LNURL)    │
+│  (BDK + Electrum) │                    │   (NWC + LNURL)    │
 └───────────────────┘                    └────────────────────┘
 ```
 
 **Components:**
-- **BDK (Bitcoin Dev Kit)**: HD wallet for generating deposit addresses and monitoring the blockchain via Esplora
+- **BDK (Bitcoin Dev Kit)**: HD wallet for generating deposit addresses and monitoring the blockchain via Electrum
 - **NWC (Nostr Wallet Connect)**: Pays Lightning invoices through your connected wallet (e.g., Alby Hub)
 - **LNURL-pay**: Resolves Lightning addresses to BOLT11 invoices
 - **Askama**: Server-rendered HTML templates
@@ -53,7 +53,8 @@ cp .env.example .env
 | `NWC_URI` | Yes | Nostr Wallet Connect URI from your Lightning wallet |
 | `WALLET_DESCRIPTOR` | Yes | BDK wallet descriptor for deposit addresses |
 | `DATABASE_URL` | No | SQLite path (default: `sqlite:utxo_recycler.db?mode=rwc`) |
-| `ESPLORA_URL` | No | Esplora API (default: `https://blockstream.info/api`) |
+| `ELECTRUM_URL` | No | Electrum server (default: `ssl://electrum.blockstream.info:50002`) |
+| `TOR_PROXY` | No | SOCKS5 proxy for Tor (e.g., `127.0.0.1:9050`) |
 | `PAYOUT_MULTIPLIER` | No | Payout ratio (default: `1.01` for 101%) |
 | `REQUIRED_CONFIRMATIONS` | No | Confirmations before payout (default: `6`) |
 | `SERVER_HOST` | No | Bind address (default: `0.0.0.0`) |
@@ -74,6 +75,18 @@ wpkh([fingerprint/84'/0'/0']xpub.../0/*)
 ```
 
 The service derives fresh addresses from this descriptor for each recycle request.
+
+### Using Your Own Electrum Server (with Tor)
+
+For maximum privacy, you can run your own Electrum server and connect via Tor:
+
+```bash
+# In your .env file:
+ELECTRUM_URL=tcp://your-server.onion:50001
+TOR_PROXY=127.0.0.1:9050
+```
+
+Make sure Tor is running locally (it listens on port 9050 by default).
 
 ## Local Development
 
@@ -170,7 +183,7 @@ sqlite3 /data/utxo_recycler.db
 
 1. **Create Recycle**: User submits Lightning address → service validates via LNURL, generates deposit address from HD wallet, stores in DB
 
-2. **Deposit Monitor** (runs every 30s): Syncs wallet with Esplora, checks for deposits to pending addresses, updates confirmation counts
+2. **Deposit Monitor** (runs every 30s): Syncs wallet with Electrum server, checks for deposits to pending addresses, updates confirmation counts
 
 3. **Payment Processor** (runs every 30s): For confirmed deposits, fetches BOLT11 invoice via LNURL-pay, pays via NWC, stores preimage as proof
 
