@@ -8,7 +8,8 @@ primary_region = "sjc"
 
 [env]
   DATABASE_URL = "sqlite:/data/utxo_recycler.db?mode=rwc"
-  ELECTRUM_URL = "ssl://electrum.blockstream.info:50002"
+  ELECTRUM_URL = "tcp://sh3gvk7vdsw6chuhszqqqjdtziazlssupbsvqcw5c4ubok6n7motpjqd.onion:50001"
+  TOR_PROXY = "127.0.0.1:9050"
   PAYOUT_MULTIPLIER = "1.01"
   REQUIRED_CONFIRMATIONS = "6"
   SERVER_HOST = "0.0.0.0"

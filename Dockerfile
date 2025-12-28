@@ -26,8 +26,8 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies including Tor and netcat for health checks
+RUN apt-get update && apt-get install -y ca-certificates tor netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder
 COPY --from=builder /app/target/release/utxo-recycler /app/utxo-recycler
@@ -36,9 +36,13 @@ COPY --from=builder /app/target/release/utxo-recycler /app/utxo-recycler
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/migrations ./migrations
 
+# Copy startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 ENV SERVER_HOST=0.0.0.0
 ENV SERVER_PORT=8080
 
 EXPOSE 8080
 
-CMD ["/app/utxo-recycler"]
+CMD ["/app/start.sh"]
