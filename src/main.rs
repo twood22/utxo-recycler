@@ -10,6 +10,7 @@ use crate::config::Config;
 use crate::lightning::NwcClient;
 use crate::wallet::BdkWallet;
 use crate::workers::{run_deposit_monitor, run_payment_processor};
+use rustls::crypto::ring::default_provider;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::SqlitePool;
 use std::net::SocketAddr;
@@ -26,6 +27,11 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Install rustls crypto provider (required for TLS connections)
+    default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     // Initialize logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
