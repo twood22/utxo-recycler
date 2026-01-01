@@ -2,6 +2,8 @@
 
 ## Economic / Business Model
 
+- **Dust creation incentive** - The bonus payment (e.g., 5%) incentivizes users to intentionally create dust UTXOs just to claim the reward. This defeats the purpose of consolidating existing dust. **Mitigation:** Only accept UTXOs that were created before the service announcement date. This requires checking the UTXO's creation block height against a cutoff.
+
 - **No minimum deposit** - Users can deposit dust amounts (546 sats) that cost more to spend than they're worth. Consider enforcing a minimum of 5,000-10,000 sats.
 
 - **No maximum deposit** - Large deposits could drain Lightning liquidity. Need caps or liquidity checks before accepting deposits.
