@@ -2,11 +2,13 @@
 
 ## Economic / Business Model
 
-- **Dust creation incentive** - The bonus payment (e.g., 5%) incentivizes users to intentionally create dust UTXOs just to claim the reward. This defeats the purpose of consolidating existing dust. **Mitigation:** Only accept UTXOs that were created before the service announcement date. This requires checking the UTXO's creation block height against a cutoff.
+- **Dust creation incentive** - ~~The bonus payment (e.g., 5%) incentivizes users to intentionally create dust UTXOs just to claim the reward. This defeats the purpose of consolidating existing dust.~~ **ADDRESSED:** Implemented block height cutoff (default: block 930,400). Only UTXOs created before this block are eligible for payout. UTXOs created at or after the cutoff are kept as donations.
+
+- **Large UTXO abuse** - ~~Users could send small amounts from large UTXOs to claim the bonus without actually consolidating dust.~~ **ADDRESSED:** Implemented input UTXO size validation. The service verifies that ALL input UTXOs in the deposit transaction are below 1,000 sats (configurable via `MAX_INPUT_SATS`). This ensures only true dust consolidation qualifies.
 
 - **No minimum deposit** - Users can deposit dust amounts (546 sats) that cost more to spend than they're worth. Consider enforcing a minimum of 5,000-10,000 sats.
 
-- **No maximum deposit** - Large deposits could drain Lightning liquidity. Need caps or liquidity checks before accepting deposits.
+- ~~**No maximum deposit** - Large deposits could drain Lightning liquidity.~~ **ADDRESSED:** The input size limit (1,000 sats) inherently caps deposit sizes since only dust UTXOs are accepted.
 
 - **Lightning liquidity risk** - If on-chain deposits outpace outbound Lightning capacity, payouts will fail until rebalanced. No automated liquidity management.
 

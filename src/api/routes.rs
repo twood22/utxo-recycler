@@ -24,7 +24,10 @@ pub fn create_router() -> Router<Arc<AppState>> {
 // Templates
 #[derive(Template)]
 #[template(path = "index.html")]
-struct IndexTemplate;
+struct IndexTemplate {
+    cutoff_block_height: u32,
+    max_input_sats: u64,
+}
 
 #[derive(Template)]
 #[template(path = "recycle.html")]
@@ -40,6 +43,12 @@ struct RecycleTemplate {
     deposit_confirmations: u32,
     required_confirmations: u32,
     confirmation_percent: u32,
+    deposit_block_height: Option<u32>,
+    cutoff_block_height: u32,
+    max_input_sats: u64,
+    is_eligible: bool,
+    donation_reason: Option<String>,
+    recorded_max_input: Option<u64>,
     payout_amount_sats: Option<u64>,
     payment_preimage: Option<String>,
     is_pending: bool,
@@ -77,8 +86,11 @@ struct ErrorResponse {
 }
 
 // Handlers
-async fn index_page() -> impl IntoResponse {
-    HtmlTemplate(IndexTemplate)
+async fn index_page(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    HtmlTemplate(IndexTemplate {
+        cutoff_block_height: state.config.cutoff_block_height,
+        max_input_sats: state.config.max_input_sats,
+    })
 }
 
 async fn recycle_page(
@@ -115,6 +127,7 @@ async fn recycle_page(
         RecycleStatus::Confirmed => "status-confirmed",
         RecycleStatus::Paid => "status-paid",
         RecycleStatus::Failed => "status-failed",
+        RecycleStatus::Donation => "status-donation",
     };
 
     let is_pending = matches!(
@@ -140,6 +153,12 @@ async fn recycle_page(
         deposit_confirmations: recycle.deposit_confirmations,
         required_confirmations: state.config.required_confirmations,
         confirmation_percent,
+        deposit_block_height: recycle.deposit_block_height,
+        cutoff_block_height: state.config.cutoff_block_height,
+        max_input_sats: state.config.max_input_sats,
+        is_eligible: recycle.is_eligible,
+        donation_reason: recycle.donation_reason,
+        recorded_max_input: recycle.max_input_sats,
         payout_amount_sats: recycle.payout_amount_sats,
         payment_preimage: recycle.payment_preimage,
         is_pending,

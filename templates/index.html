@@ -14,11 +14,26 @@
         </header>
 
         <main>
+            <div class="warning-box">
+                <h2>Important: Eligibility Requirements</h2>
+                <p>
+                    To receive the 101% payout, your deposit must meet <strong>both</strong> criteria:
+                </p>
+                <ul>
+                    <li>The UTXO must have been created <strong>before block {{ cutoff_block_height }}</strong></li>
+                    <li>The input UTXO must be <strong>less than {{ max_input_sats }} sats</strong> (true dust)</li>
+                </ul>
+                <p>
+                    Deposits that don't meet these criteria will be kept as <strong>donations</strong> to fund this service.
+                    We will <strong>NOT</strong> pay them back.
+                </p>
+            </div>
+
             <div class="info-box">
                 <h2>How it works</h2>
                 <ol>
                     <li>Enter your Lightning address below</li>
-                    <li>Send your dust UTXOs to the generated Bitcoin address</li>
+                    <li>Send your <strong>pre-existing</strong> dust UTXOs to the generated Bitcoin address</li>
                     <li>Wait for 6 confirmations</li>
                     <li>Receive <strong>101%</strong> of your deposit via Lightning!</li>
                 </ol>
@@ -47,6 +62,18 @@
                 <details>
                     <summary>Why do you pay 101%?</summary>
                     <p>We're incentivizing users to consolidate their dust UTXOs, which helps reduce the size of Bitcoin's UTXO set and makes the network more efficient for everyone.</p>
+                </details>
+                <details>
+                    <summary>Why is there a block height cutoff?</summary>
+                    <p>The 101% bonus could incentivize users to intentionally create new dust UTXOs just to claim the reward. That defeats the purpose of consolidating <em>existing</em> dust. By only accepting UTXOs created before block {{ cutoff_block_height }}, we ensure only pre-existing dust qualifies for the payout.</p>
+                </details>
+                <details>
+                    <summary>Why is there a maximum input size?</summary>
+                    <p>We only accept UTXOs smaller than {{ max_input_sats }} sats because those are true "dust" - outputs that are uneconomical to spend at normal fee rates. Larger UTXOs don't need our service and would drain our Lightning liquidity. We verify the <em>input</em> UTXO size, not just the amount you send.</p>
+                </details>
+                <details>
+                    <summary>What happens if my deposit doesn't qualify?</summary>
+                    <p>It will be kept as a donation to help fund this service. <strong>You will not receive any payment back.</strong> Please verify your UTXO meets both criteria before sending!</p>
                 </details>
                 <details>
                     <summary>Why 6 confirmations?</summary>

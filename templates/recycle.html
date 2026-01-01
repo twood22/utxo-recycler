@@ -94,6 +94,49 @@
                         <p>Unfortunately, the Lightning payment could not be completed. Please contact support.</p>
                     </div>
                     {% endif %}
+
+                    {% if status_class == "status-donation" %}
+                    <div class="donation-message">
+                        <h3>Donation Received</h3>
+                        {% match donation_reason.as_deref() %}
+                        {% when Some with ("input_too_large") %}
+                        <p>
+                            Your transaction used an input UTXO of <strong>{{ recorded_max_input.unwrap_or(0) }} sats</strong>,
+                            which exceeds our limit of <strong>{{ max_input_sats }} sats</strong>.
+                        </p>
+                        <p>
+                            We only accept true dust UTXOs (inputs under {{ max_input_sats }} sats).
+                            Larger inputs don't need our service.
+                        </p>
+                        {% when Some with ("block_height") %}
+                        <p>
+                            Your UTXO was created at block <strong>{{ deposit_block_height.unwrap_or(0) }}</strong>,
+                            which is <strong>at or after</strong> our cutoff of block <strong>{{ cutoff_block_height }}</strong>.
+                        </p>
+                        <p>
+                            We only accept UTXOs created before the cutoff to prevent gaming the system.
+                        </p>
+                        {% when _ %}
+                        <p>
+                            Your deposit did not meet our eligibility requirements.
+                        </p>
+                        {% endmatch %}
+                        <p>
+                            Per our terms, ineligible deposits are kept as donations
+                            to fund this service. <strong>No payout will be made.</strong>
+                        </p>
+                        <p class="thank-you">Thank you for supporting UTXO Recycler!</p>
+                    </div>
+                    {% endif %}
+
+                    {% if let Some(block_height) = deposit_block_height %}
+                    {% if is_eligible %}
+                    <div class="detail-row eligibility-info">
+                        <span class="label">UTXO Created:</span>
+                        <span class="value eligible">Block {{ block_height }} (before cutoff, eligible for payout)</span>
+                    </div>
+                    {% endif %}
+                    {% endif %}
                 </div>
             </div>
 
