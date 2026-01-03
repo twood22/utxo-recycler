@@ -1,8 +1,9 @@
 use anyhow::Result;
-use bdk_electrum::electrum_client::{Client, ConfigBuilder, Socks5Config};
+use bdk_electrum::electrum_client::{Client, ConfigBuilder, ElectrumApi, Socks5Config};
 use bdk_electrum::BdkElectrumClient;
-use bdk_wallet::bitcoin::Network;
+use bdk_wallet::bitcoin::{Network, Txid};
 use bdk_wallet::{KeychainKind, Wallet};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -17,6 +18,9 @@ pub struct DepositInfo {
     pub txid: String,
     pub amount_sats: u64,
     pub confirmations: u32,
+    /// The block height where this transaction was confirmed.
+    /// None if the transaction is still unconfirmed.
+    pub block_height: Option<u32>,
 }
 
 impl BdkWallet {
@@ -149,21 +153,23 @@ impl BdkWallet {
                 // Get the address for this index and compare
                 let expected_address = wallet.peek_address(KeychainKind::External, address_index);
                 if *script == expected_address.address.script_pubkey() {
-                    let confirmations = match tx.chain_position {
+                    let (confirmations, block_height) = match tx.chain_position {
                         bdk_wallet::chain::ChainPosition::Confirmed {
                             anchor,
                             transitively: _,
                         } => {
                             let current_height = wallet.latest_checkpoint().height();
-                            current_height.saturating_sub(anchor.block_id.height) + 1
+                            let confs = current_height.saturating_sub(anchor.block_id.height) + 1;
+                            (confs, Some(anchor.block_id.height))
                         }
-                        bdk_wallet::chain::ChainPosition::Unconfirmed { .. } => 0,
+                        bdk_wallet::chain::ChainPosition::Unconfirmed { .. } => (0, None),
                     };
 
                     return Ok(Some(DepositInfo {
                         txid,
                         amount_sats: output.value.to_sat(),
                         confirmations,
+                        block_height,
                     }));
                 }
             }
@@ -179,5 +185,97 @@ impl BdkWallet {
         let _ = wallet.reveal_addresses_to(KeychainKind::External, index);
 
         Ok(())
+    }
+
+    /// Get the maximum input UTXO value for a transaction.
+    /// This looks up each input's previous output to determine the original UTXO sizes.
+    /// Returns the largest input value, or None if the transaction couldn't be found/parsed.
+    pub async fn get_max_input_value(&self, txid_str: &str) -> Result<Option<u64>> {
+        let electrum_url = self.electrum_url.clone();
+        let tor_proxy = self.tor_proxy.clone();
+        let txid_string = txid_str.to_string();
+
+        // Electrum client is synchronous, so run in blocking task
+        tokio::task::spawn_blocking(move || -> Result<Option<u64>> {
+            let config = if let Some(ref proxy) = tor_proxy {
+                ConfigBuilder::new()
+                    .socks5(Some(Socks5Config {
+                        addr: proxy.clone(),
+                        credentials: None,
+                    }))
+                    .timeout(Some(30))
+                    .build()
+            } else {
+                ConfigBuilder::new()
+                    .timeout(Some(30))
+                    .build()
+            };
+
+            let client = Client::from_config(&electrum_url, config)?;
+
+            // Parse the txid
+            let txid = match Txid::from_str(&txid_string) {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!("Failed to parse txid {}: {}", txid_string, e);
+                    return Ok(None);
+                }
+            };
+
+            // Fetch the transaction
+            let tx = match client.transaction_get(&txid) {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!("Failed to fetch transaction {}: {}", txid_string, e);
+                    return Ok(None);
+                }
+            };
+
+            let mut max_input_value: u64 = 0;
+
+            // For each input, look up the previous output's value
+            for input in tx.input.iter() {
+                let prev_txid = input.previous_output.txid;
+                let prev_vout = input.previous_output.vout as usize;
+
+                // Fetch the previous transaction
+                let prev_tx = match client.transaction_get(&prev_txid) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to fetch parent tx {} for input: {}",
+                            prev_txid,
+                            e
+                        );
+                        // Can't verify this input - skip and continue
+                        // We'll be conservative and not reject based on unknown inputs
+                        continue;
+                    }
+                };
+
+                // Get the output value at the specified index
+                if let Some(output) = prev_tx.output.get(prev_vout) {
+                    let value = output.value.to_sat();
+                    if value > max_input_value {
+                        max_input_value = value;
+                    }
+                    tracing::debug!(
+                        "Input from {}:{} has value {} sats",
+                        prev_txid,
+                        prev_vout,
+                        value
+                    );
+                }
+            }
+
+            if max_input_value == 0 && !tx.input.is_empty() {
+                // Couldn't determine any input values
+                tracing::warn!("Could not determine input values for tx {}", txid_string);
+                return Ok(None);
+            }
+
+            Ok(Some(max_input_value))
+        })
+        .await?
     }
 }

@@ -10,6 +10,9 @@ pub enum RecycleStatus {
     Confirmed,
     Paid,
     Failed,
+    /// Deposit received but UTXO was created after the cutoff block.
+    /// No payout will be made - kept as donation.
+    Donation,
 }
 
 impl RecycleStatus {
@@ -20,6 +23,7 @@ impl RecycleStatus {
             Self::Confirmed => "confirmed",
             Self::Paid => "paid",
             Self::Failed => "failed",
+            Self::Donation => "donation",
         }
     }
 
@@ -30,6 +34,7 @@ impl RecycleStatus {
             "confirmed" => Self::Confirmed,
             "paid" => Self::Paid,
             "failed" => Self::Failed,
+            "donation" => Self::Donation,
             _ => Self::Failed,
         }
     }
@@ -41,6 +46,7 @@ impl RecycleStatus {
             Self::Confirmed => "Confirmed",
             Self::Paid => "Paid",
             Self::Failed => "Failed",
+            Self::Donation => "Donation Received",
         }
     }
 }
@@ -55,6 +61,10 @@ pub struct RecycleRow {
     pub deposit_txid: Option<String>,
     pub deposit_amount_sats: Option<i64>,
     pub deposit_confirmations: Option<i64>,
+    pub deposit_block_height: Option<i64>,
+    pub is_eligible: Option<i64>,
+    pub donation_reason: Option<String>,
+    pub max_input_sats: Option<i64>,
     pub payout_amount_sats: Option<i64>,
     pub payment_preimage: Option<String>,
     pub payment_hash: Option<String>,
@@ -73,6 +83,14 @@ pub struct Recycle {
     pub deposit_txid: Option<String>,
     pub deposit_amount_sats: Option<u64>,
     pub deposit_confirmations: u32,
+    /// The block height where the deposit was confirmed
+    pub deposit_block_height: Option<u32>,
+    /// Whether the UTXO is eligible for payout (created before cutoff block, small inputs)
+    pub is_eligible: bool,
+    /// Reason for donation status: "block_height" or "input_too_large"
+    pub donation_reason: Option<String>,
+    /// Maximum input UTXO value in the deposit transaction
+    pub max_input_sats: Option<u64>,
     pub payout_amount_sats: Option<u64>,
     pub payment_preimage: Option<String>,
     pub payment_hash: Option<String>,
@@ -92,6 +110,10 @@ impl From<RecycleRow> for Recycle {
             deposit_txid: row.deposit_txid,
             deposit_amount_sats: row.deposit_amount_sats.map(|v| v as u64),
             deposit_confirmations: row.deposit_confirmations.unwrap_or(0) as u32,
+            deposit_block_height: row.deposit_block_height.map(|v| v as u32),
+            is_eligible: row.is_eligible.unwrap_or(1) == 1,
+            donation_reason: row.donation_reason,
+            max_input_sats: row.max_input_sats.map(|v| v as u64),
             payout_amount_sats: row.payout_amount_sats.map(|v| v as u64),
             payment_preimage: row.payment_preimage,
             payment_hash: row.payment_hash,
@@ -193,9 +215,12 @@ impl RecycleRepository {
         txid: &str,
         amount_sats: u64,
         confirmations: u32,
+        block_height: Option<u32>,
+        max_input_sats: Option<u64>,
+        required_confirmations: u32,
     ) -> anyhow::Result<()> {
         let now = Utc::now().to_rfc3339();
-        let status = if confirmations >= 6 {
+        let status = if confirmations >= required_confirmations {
             RecycleStatus::Confirmed.as_str()
         } else {
             RecycleStatus::Confirming.as_str()
@@ -204,7 +229,8 @@ impl RecycleRepository {
         sqlx::query(
             r#"
             UPDATE recycles
-            SET status = ?, deposit_txid = ?, deposit_amount_sats = ?, deposit_confirmations = ?, updated_at = ?
+            SET status = ?, deposit_txid = ?, deposit_amount_sats = ?, deposit_confirmations = ?,
+                deposit_block_height = ?, max_input_sats = ?, is_eligible = 1, updated_at = ?
             WHERE id = ?
             "#,
         )
@@ -212,6 +238,43 @@ impl RecycleRepository {
         .bind(txid)
         .bind(amount_sats as i64)
         .bind(confirmations as i64)
+        .bind(block_height.map(|h| h as i64))
+        .bind(max_input_sats.map(|v| v as i64))
+        .bind(&now)
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Mark a deposit as a donation. No payout will be processed.
+    /// reason: "block_height" (after cutoff) or "input_too_large" (input > max allowed)
+    pub async fn update_as_donation(
+        pool: &SqlitePool,
+        id: &str,
+        txid: &str,
+        amount_sats: u64,
+        block_height: Option<u32>,
+        max_input_sats: Option<u64>,
+        reason: &str,
+    ) -> anyhow::Result<()> {
+        let now = Utc::now().to_rfc3339();
+
+        sqlx::query(
+            r#"
+            UPDATE recycles
+            SET status = 'donation', deposit_txid = ?, deposit_amount_sats = ?,
+                deposit_block_height = ?, max_input_sats = ?, is_eligible = 0,
+                donation_reason = ?, updated_at = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(txid)
+        .bind(amount_sats as i64)
+        .bind(block_height.map(|h| h as i64))
+        .bind(max_input_sats.map(|v| v as i64))
+        .bind(reason)
         .bind(&now)
         .bind(id)
         .execute(pool)

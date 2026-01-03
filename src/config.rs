@@ -1,5 +1,15 @@
 use std::env;
 
+/// The cutoff block height for UTXO eligibility.
+/// Only UTXOs created BEFORE this block are eligible for payout.
+/// UTXOs created at or after this block are kept as donations.
+pub const DEFAULT_CUTOFF_BLOCK_HEIGHT: u32 = 930_400;
+
+/// Maximum input UTXO size in satoshis.
+/// Only transactions where ALL inputs are below this threshold are eligible.
+/// This ensures we're only accepting true dust consolidation, not regular transactions.
+pub const DEFAULT_MAX_INPUT_SATS: u64 = 1_000;
+
 #[derive(Clone)]
 pub struct Config {
     pub database_url: String,
@@ -11,6 +21,12 @@ pub struct Config {
     pub required_confirmations: u32,
     pub server_host: String,
     pub server_port: u16,
+    /// Only UTXOs created before this block height are eligible for payout.
+    /// UTXOs at or after this height are treated as donations.
+    pub cutoff_block_height: u32,
+    /// Maximum input UTXO size in satoshis.
+    /// Transactions with any input larger than this are rejected (kept as donations).
+    pub max_input_sats: u64,
 }
 
 impl Config {
@@ -40,6 +56,14 @@ impl Config {
                 .unwrap_or_else(|_| "3000".to_string())
                 .parse()
                 .unwrap_or(3000),
+            cutoff_block_height: env::var("CUTOFF_BLOCK_HEIGHT")
+                .unwrap_or_else(|_| DEFAULT_CUTOFF_BLOCK_HEIGHT.to_string())
+                .parse()
+                .unwrap_or(DEFAULT_CUTOFF_BLOCK_HEIGHT),
+            max_input_sats: env::var("MAX_INPUT_SATS")
+                .unwrap_or_else(|_| DEFAULT_MAX_INPUT_SATS.to_string())
+                .parse()
+                .unwrap_or(DEFAULT_MAX_INPUT_SATS),
         })
     }
 }

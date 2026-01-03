@@ -57,6 +57,8 @@ cp .env.example .env
 | `TOR_PROXY` | No | SOCKS5 proxy for Tor (e.g., `127.0.0.1:9050`) |
 | `PAYOUT_MULTIPLIER` | No | Payout ratio (default: `1.01` for 101%) |
 | `REQUIRED_CONFIRMATIONS` | No | Confirmations before payout (default: `6`) |
+| `CUTOFF_BLOCK_HEIGHT` | No | Only UTXOs created before this block are eligible for payout (default: `930400`) |
+| `MAX_INPUT_SATS` | No | Maximum input UTXO size in sats - larger inputs are rejected (default: `1000`) |
 | `SERVER_HOST` | No | Bind address (default: `0.0.0.0`) |
 | `SERVER_PORT` | No | Port (default: `3000`) |
 
@@ -158,6 +160,7 @@ The SQLite database stores recycle records with the following states:
 | `confirmed` | Ready for Lightning payout |
 | `paid` | Successfully paid via Lightning |
 | `failed` | Payment failed (will retry) |
+| `donation` | UTXO created after cutoff block, kept as donation (no payout) |
 
 ### Manual Database Access
 
