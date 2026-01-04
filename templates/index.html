@@ -3,91 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UTXO Recycler</title>
+    <title>UTXO Recycler — Dust Consolidation Protocol</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♻</text></svg>">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>UTXO Recycler</h1>
-            <p class="tagline">Help Bitcoin scale by recycling your dust UTXOs</p>
+            <p class="tagline">Consolidate dust UTXOs. Strengthen the network.</p>
         </header>
 
         <main>
-            <div class="warning-box">
-                <h2>Important: Eligibility Requirements</h2>
-                <p>
-                    To receive the 101% payout, your deposit must meet <strong>both</strong> criteria:
-                </p>
-                <ul>
-                    <li>The UTXO must have been created <strong>before block {{ cutoff_block_height }}</strong></li>
-                    <li>The input UTXO must be <strong>less than {{ max_input_sats }} sats</strong> (true dust)</li>
-                </ul>
-                <p>
-                    Deposits that don't meet these criteria will be kept as <strong>donations</strong> to fund this service.
-                    We will <strong>NOT</strong> pay them back.
-                </p>
-            </div>
-
             <div class="info-box">
-                <h2>How it works</h2>
+                <h2>Protocol Sequence</h2>
                 <ol>
                     <li>Enter your Lightning address below</li>
-                    <li>Send your <strong>pre-existing</strong> dust UTXOs to the generated Bitcoin address</li>
-                    <li>Wait for 6 confirmations</li>
-                    <li>Receive <strong>101%</strong> of your deposit via Lightning!</li>
+                    <li>Review eligibility requirements</li>
+                    <li>Send your dust UTXOs to the generated address</li>
+                    <li>Receive <strong>{{ payout_percent }}%</strong> via Lightning Network</li>
                 </ol>
             </div>
 
-            <form action="/api/recycle" method="POST" class="recycle-form">
-                <label for="lightning_address">Your Lightning Address</label>
+            <form action="/confirm" method="POST" class="recycle-form">
+                <label for="lightning_address">Lightning Address</label>
                 <input
                     type="text"
                     id="lightning_address"
                     name="lightning_address"
-                    placeholder="you@getalby.com"
+                    placeholder="satoshi@getalby.com"
                     required
                     pattern="[^@]+@[^@]+\.[^@]+"
-                    title="Please enter a valid lightning address (e.g., user@domain.com)"
+                    title="Enter a valid Lightning address (user@domain.com)"
+                    autocomplete="off"
+                    spellcheck="false"
                 >
-                <button type="submit">Start Recycling</button>
+                <button type="submit">Continue</button>
             </form>
 
             <div class="faq">
-                <h3>FAQ</h3>
+                <h3>System Documentation</h3>
                 <details>
                     <summary>What is a dust UTXO?</summary>
-                    <p>A dust UTXO is a very small Bitcoin output that costs more in fees to spend than it's worth. These accumulate over time and bloat the Bitcoin blockchain.</p>
+                    <p>A dust UTXO is a very small Bitcoin output that costs more in fees to spend than it's worth. These accumulate over time and bloat the Bitcoin blockchain's UTXO set.</p>
                 </details>
                 <details>
-                    <summary>Why do you pay 101%?</summary>
-                    <p>We're incentivizing users to consolidate their dust UTXOs, which helps reduce the size of Bitcoin's UTXO set and makes the network more efficient for everyone.</p>
+                    <summary>Why {{ payout_percent }}% payout?</summary>
+                    <p>We incentivize consolidation of dust UTXOs to reduce Bitcoin's UTXO set size, making the network more efficient for everyone.</p>
                 </details>
                 <details>
-                    <summary>Why is there a block height cutoff?</summary>
-                    <p>The 101% bonus could incentivize users to intentionally create new dust UTXOs just to claim the reward. That defeats the purpose of consolidating <em>existing</em> dust. By only accepting UTXOs created before block {{ cutoff_block_height }}, we ensure only pre-existing dust qualifies for the payout.</p>
-                </details>
-                <details>
-                    <summary>Why is there a maximum input size?</summary>
-                    <p>We only accept UTXOs smaller than {{ max_input_sats }} sats because those are true "dust" - outputs that are uneconomical to spend at normal fee rates. Larger UTXOs don't need our service and would drain our Lightning liquidity. We verify the <em>input</em> UTXO size, not just the amount you send.</p>
-                </details>
-                <details>
-                    <summary>What happens if my deposit doesn't qualify?</summary>
-                    <p>It will be kept as a donation to help fund this service. <strong>You will not receive any payment back.</strong> Please verify your UTXO meets both criteria before sending!</p>
-                </details>
-                <details>
-                    <summary>Why 6 confirmations?</summary>
-                    <p>6 confirmations is the standard for considering a Bitcoin transaction final. This protects against double-spend attacks.</p>
-                </details>
-                <details>
-                    <summary>What Lightning wallets work?</summary>
-                    <p>Any wallet that supports Lightning addresses (LNURL-pay), such as Alby, Wallet of Satoshi, Phoenix, Zeus, and many others.</p>
+                    <summary>What wallets work?</summary>
+                    <p>Any wallet supporting Lightning addresses (LNURL-pay): Alby, Wallet of Satoshi, Phoenix, Zeus, Breez, and others.</p>
                 </details>
             </div>
         </main>
 
         <footer>
-            <p>UTXO Recycler — Helping Bitcoin scale, one dust UTXO at a time.</p>
+            <p>UTXO Recycler — Reducing blockchain bloat, one dust UTXO at a time.</p>
         </footer>
     </div>
 </body>

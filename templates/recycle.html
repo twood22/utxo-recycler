@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recycle Status - UTXO Recycler</title>
+    <title>Recycle Status — UTXO Recycler</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♻</text></svg>">
     {% if is_pending %}
     <meta http-equiv="refresh" content="10">
     {% endif %}
@@ -21,13 +22,13 @@
 
                 <div class="recycle-details">
                     <div class="detail-row">
-                        <span class="label">Lightning Address:</span>
+                        <span class="label">Lightning Address</span>
                         <span class="value">{{ lightning_address }}</span>
                     </div>
 
                     {% if status_class == "status-awaiting" %}
                     <div class="deposit-section">
-                        <h3>Send your dust UTXOs here:</h3>
+                        <h3>Deposit Dust UTXOs</h3>
                         <div class="qr-code">
                             {{ qr_code_svg|safe }}
                         </div>
@@ -35,16 +36,16 @@
                             <code id="deposit-address">{{ deposit_address }}</code>
                             <button onclick="copyAddress()" class="copy-btn">Copy</button>
                         </div>
-                        <p class="warning">Only send to this address once. Additional deposits will be ignored.</p>
+                        <p class="warning">Single deposit only. Additional deposits will be ignored.</p>
                     </div>
                     {% endif %}
 
                     {% if let Some(txid) = deposit_txid %}
                     <div class="detail-row">
-                        <span class="label">Deposit Transaction:</span>
+                        <span class="label">Deposit TX</span>
                         <span class="value">
                             <a href="https://mempool.space/tx/{{ txid }}" target="_blank" rel="noopener">
-                                {{ txid|truncate(16) }}...
+                                {{ txid|truncate(20) }}...
                             </a>
                         </span>
                     </div>
@@ -52,88 +53,86 @@
 
                     {% if let Some(amount) = deposit_amount_sats %}
                     <div class="detail-row">
-                        <span class="label">Deposit Amount:</span>
+                        <span class="label">Deposit Amount</span>
                         <span class="value">{{ amount }} sats</span>
                     </div>
                     {% endif %}
 
                     {% if status_class == "status-confirming" %}
                     <div class="confirmation-progress">
-                        <h3>Waiting for confirmations</h3>
+                        <h3>Awaiting Confirmations</h3>
                         <div class="progress-bar">
                             <div class="progress-fill" style="width: {{ confirmation_percent }}%"></div>
                         </div>
-                        <p>{{ deposit_confirmations }} / {{ required_confirmations }} confirmations</p>
+                        <p>{{ deposit_confirmations }} / {{ required_confirmations }}</p>
                     </div>
                     {% endif %}
 
                     {% if let Some(amount) = payout_amount_sats %}
                     <div class="detail-row">
-                        <span class="label">Payout Amount:</span>
+                        <span class="label">Payout Amount</span>
                         <span class="value highlight">{{ amount }} sats</span>
                     </div>
                     {% endif %}
 
                     {% if let Some(preimage) = payment_preimage %}
                     <div class="detail-row">
-                        <span class="label">Payment Proof:</span>
-                        <span class="value"><code>{{ preimage|truncate(32) }}...</code></span>
+                        <span class="label">Payment Proof</span>
+                        <span class="value"><code>{{ preimage|truncate(24) }}...</code></span>
                     </div>
                     {% endif %}
 
                     {% if status_class == "status-paid" %}
                     <div class="success-message">
-                        <h3>Payment Complete!</h3>
-                        <p>Your Lightning payment has been sent successfully. Thank you for recycling!</p>
+                        <h3>Payment Complete</h3>
+                        <p>Lightning payment sent successfully. Thank you for recycling your dust UTXOs.</p>
                     </div>
                     {% endif %}
 
                     {% if status_class == "status-failed" %}
                     <div class="error-message">
                         <h3>Payment Failed</h3>
-                        <p>Unfortunately, the Lightning payment could not be completed. Please contact support.</p>
+                        <p>Lightning payment could not be completed. Please contact support for assistance.</p>
                     </div>
                     {% endif %}
 
                     {% if status_class == "status-donation" %}
                     <div class="donation-message">
-                        <h3>Donation Received</h3>
+                        <h3>Donation Recorded</h3>
                         {% match donation_reason.as_deref() %}
                         {% when Some with ("input_too_large") %}
                         <p>
-                            Your transaction used an input UTXO of <strong>{{ recorded_max_input.unwrap_or(0) }} sats</strong>,
-                            which exceeds our limit of <strong>{{ max_input_sats }} sats</strong>.
+                            Input UTXO: <strong>{{ recorded_max_input.unwrap_or(0) }} sats</strong>
+                            — exceeds limit of <strong>{{ max_input_sats }} sats</strong>
                         </p>
                         <p>
-                            We only accept true dust UTXOs (inputs under {{ max_input_sats }} sats).
-                            Larger inputs don't need our service.
+                            Only true dust UTXOs (inputs under {{ max_input_sats }} sats) qualify for the {{ payout_percent }}% payout.
                         </p>
                         {% when Some with ("block_height") %}
                         <p>
-                            Your UTXO was created at block <strong>{{ deposit_block_height.unwrap_or(0) }}</strong>,
-                            which is <strong>at or after</strong> our cutoff of block <strong>{{ cutoff_block_height }}</strong>.
+                            UTXO block: <strong>{{ deposit_block_height.unwrap_or(0) }}</strong>
+                            — at or after cutoff block <strong>{{ cutoff_block_height }}</strong>
                         </p>
                         <p>
-                            We only accept UTXOs created before the cutoff to prevent gaming the system.
+                            Only UTXOs created before the cutoff qualify for the {{ payout_percent }}% payout.
                         </p>
                         {% when _ %}
                         <p>
-                            Your deposit did not meet our eligibility requirements.
+                            Deposit did not meet eligibility requirements for the {{ payout_percent }}% payout.
                         </p>
                         {% endmatch %}
                         <p>
-                            Per our terms, ineligible deposits are kept as donations
-                            to fund this service. <strong>No payout will be made.</strong>
+                            Per terms of service, ineligible deposits are kept as donations. <strong>No payout will be issued.</strong>
                         </p>
-                        <p class="thank-you">Thank you for supporting UTXO Recycler!</p>
+                        <p class="thank-you">Thank you for supporting UTXO Recycler.</p>
                     </div>
                     {% endif %}
 
                     {% if let Some(block_height) = deposit_block_height %}
                     {% if is_eligible %}
                     <div class="detail-row eligibility-info">
-                        <span class="label">UTXO Created:</span>
-                        <span class="value eligible">Block {{ block_height }} (before cutoff, eligible for payout)</span>
+                        <span class="label">UTXO Created</span>
+                        <span class="value eligible">Block {{ block_height }} — eligible for {{ payout_percent }}%</span>
                     </div>
                     {% endif %}
                     {% endif %}
@@ -141,12 +140,12 @@
             </div>
 
             <div class="actions">
-                <a href="/" class="btn">Recycle More UTXOs</a>
+                <a href="/" class="btn">Recycle More</a>
             </div>
         </main>
 
         <footer>
-            <p>UTXO Recycler — Helping Bitcoin scale, one dust UTXO at a time.</p>
+            <p>UTXO Recycler — Reducing blockchain bloat, one dust UTXO at a time.</p>
         </footer>
     </div>
 
@@ -155,8 +154,17 @@
             const address = document.getElementById('deposit-address').textContent;
             navigator.clipboard.writeText(address).then(() => {
                 const btn = document.querySelector('.copy-btn');
-                btn.textContent = 'Copied!';
-                setTimeout(() => btn.textContent = 'Copy', 2000);
+                const original = btn.textContent;
+                btn.textContent = 'Copied';
+                btn.style.background = 'var(--toxic-green)';
+                btn.style.color = 'var(--bg-void)';
+                btn.style.borderColor = 'var(--toxic-green)';
+                setTimeout(() => {
+                    btn.textContent = original;
+                    btn.style.background = '';
+                    btn.style.color = '';
+                    btn.style.borderColor = '';
+                }, 2000);
             });
         }
     </script>
