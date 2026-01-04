@@ -1,5 +1,6 @@
 use crate::db::{RecycleRepository, RecycleStatus};
 use crate::AppState;
+use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
@@ -45,6 +46,12 @@ async fn check_deposits(state: &AppState) -> anyhow::Result<()> {
     // Sync the wallet with the blockchain
     tracing::debug!("Syncing wallet with blockchain...");
     state.wallet.sync().await?;
+
+    // Update last sync time
+    {
+        let mut last_sync = state.last_sync.write().await;
+        *last_sync = Some(Utc::now());
+    }
 
     // Get all pending recycles (awaiting_deposit or confirming)
     let pending = RecycleRepository::find_pending_deposits(&state.db).await?;
