@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Eligibility — UTXO Recycler</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♻</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><a href="/">UTXO Recycler</a></h1>
+        </header>
+
+        <main>
+            <div class="confirm-section">
+                <div class="detail-row">
+                    <span class="label">Lightning Address</span>
+                    <span class="value">{{ lightning_address }}</span>
+                </div>
+            </div>
+
+            <div class="eligibility-box">
+                <h2>Eligibility Requirements</h2>
+                <p>
+                    To receive the <strong>{{ payout_percent }}% payout</strong>, your deposit must meet <strong>both</strong> criteria:
+                </p>
+                <ul>
+                    <li>Input UTXO must be created <strong>before block {{ cutoff_block_height }}</strong></li>
+                    <li>Input UTXO must be <strong>&lt; {{ max_input_sats }} sats</strong></li>
+                </ul>
+                <div class="criteria-details">
+                    <details>
+                        <summary>Why the block height cutoff?</summary>
+                        <p>The {{ payout_percent }}% bonus could incentivize users to create new dust just to claim the reward. By only accepting UTXOs created before block {{ cutoff_block_height }}, we ensure only <em>pre-existing</em> dust qualifies.</p>
+                    </details>
+                    <details>
+                        <summary>Why the input size limit?</summary>
+                        <p>According to <a href="https://research.mempool.space/utxo-set-report/" target="_blank" rel="noopener">research by mempool.space</a>, nearly 50% of all Bitcoin UTXOs contain less than 1,000 sats — roughly 85 million outputs holding just 419 BTC total. These are true "dust" UTXOs that are uneconomical to spend at normal fee rates. We verify the <em>input</em> UTXO size of your transaction to ensure you're recycling genuine dust.</p>
+                    </details>
+                </div>
+            </div>
+
+            <div class="donation-notice">
+                <h3>Important Notice</h3>
+                <p>
+                    Deposits that <strong>do not meet</strong> the above criteria will be kept as <strong>donations</strong> to fund this service.
+                </p>
+                <p class="emphasis">
+                    You will <strong>NOT</strong> receive any payment back for ineligible deposits.
+                </p>
+            </div>
+
+            <form action="/api/recycle" method="POST" class="recycle-form confirm-form">
+                <input type="hidden" name="lightning_address" value="{{ lightning_address }}">
+
+                <div class="checkbox-container">
+                    <input type="checkbox" id="confirmed" name="confirmed" required>
+                    <label for="confirmed" class="checkbox-label">
+                        I understand that my deposit must be:
+                        <ul>
+                            <li>From an input UTXO created <strong>before block {{ cutoff_block_height }}</strong></li>
+                            <li>From an input UTXO <strong>smaller than {{ max_input_sats }} sats</strong></li>
+                        </ul>
+                        And that deposits not meeting these criteria will be considered <strong>donations</strong> with no payout.
+                    </label>
+                </div>
+
+                <button type="submit">Generate Deposit Address</button>
+            </form>
+
+            <div class="actions">
+                <a href="/" class="btn btn-secondary">Go Back</a>
+            </div>
+        </main>
+
+        <footer>
+            <p>UTXO Recycler — Reducing blockchain bloat, one dust UTXO at a time.</p>
+        </footer>
+    </div>
+</body>
+</html>

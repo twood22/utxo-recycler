@@ -16,23 +16,37 @@ use std::sync::Arc;
 pub fn create_router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(index_page))
+        .route("/confirm", post(confirm_page))
         .route("/recycle/:id", get(recycle_page))
         .route("/api/recycle", post(create_recycle))
         .route("/api/recycle/:id", get(get_recycle))
+}
+
+// Helper to convert payout_multiplier (1.01) to percent (101)
+fn payout_percent(multiplier: f64) -> u32 {
+    (multiplier * 100.0).round() as u32
 }
 
 // Templates
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
+    payout_percent: u32,
+}
+
+#[derive(Template)]
+#[template(path = "confirm.html")]
+struct ConfirmTemplate {
+    lightning_address: String,
     cutoff_block_height: u32,
     max_input_sats: u64,
+    payout_percent: u32,
+    required_confirmations: u32,
 }
 
 #[derive(Template)]
 #[template(path = "recycle.html")]
 struct RecycleTemplate {
-    id: String,
     lightning_address: String,
     deposit_address: String,
     qr_code_svg: String,
@@ -46,6 +60,7 @@ struct RecycleTemplate {
     deposit_block_height: Option<u32>,
     cutoff_block_height: u32,
     max_input_sats: u64,
+    payout_percent: u32,
     is_eligible: bool,
     donation_reason: Option<String>,
     recorded_max_input: Option<u64>,
@@ -58,6 +73,7 @@ struct RecycleTemplate {
 #[derive(Deserialize)]
 pub struct CreateRecycleRequest {
     pub lightning_address: String,
+    pub confirmed: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -88,9 +104,47 @@ struct ErrorResponse {
 // Handlers
 async fn index_page(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     HtmlTemplate(IndexTemplate {
+        payout_percent: payout_percent(state.config.payout_multiplier),
+    })
+}
+
+async fn confirm_page(
+    State(state): State<Arc<AppState>>,
+    Form(request): Form<CreateRecycleRequest>,
+) -> Response {
+    let lightning_address = request.lightning_address.trim().to_lowercase();
+
+    // Validate lightning address format
+    if !LnurlClient::validate_lightning_address(&lightning_address) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>Invalid Lightning Address</h1><p>Please enter a valid lightning address (e.g., user@domain.com)</p><p><a href='/'>Go back</a></p>".to_string()),
+        )
+            .into_response();
+    }
+
+    // Validate the lightning address is reachable
+    let lnurl_client = LnurlClient::new();
+    if let Err(e) = lnurl_client.fetch_pay_params(&lightning_address).await {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html(format!(
+                "<h1>Could Not Verify Lightning Address</h1><p>{}</p><p><a href='/'>Go back</a></p>",
+                e
+            )),
+        )
+            .into_response();
+    }
+
+    // Show confirmation page
+    HtmlTemplate(ConfirmTemplate {
+        lightning_address,
         cutoff_block_height: state.config.cutoff_block_height,
         max_input_sats: state.config.max_input_sats,
+        payout_percent: payout_percent(state.config.payout_multiplier),
+        required_confirmations: state.config.required_confirmations,
     })
+    .into_response()
 }
 
 async fn recycle_page(
@@ -142,7 +196,6 @@ async fn recycle_page(
     };
 
     let template = RecycleTemplate {
-        id: recycle.id,
         lightning_address: recycle.lightning_address,
         deposit_address: recycle.deposit_address,
         qr_code_svg,
@@ -156,6 +209,7 @@ async fn recycle_page(
         deposit_block_height: recycle.deposit_block_height,
         cutoff_block_height: state.config.cutoff_block_height,
         max_input_sats: state.config.max_input_sats,
+        payout_percent: payout_percent(state.config.payout_multiplier),
         is_eligible: recycle.is_eligible,
         donation_reason: recycle.donation_reason,
         recorded_max_input: recycle.max_input_sats,
@@ -172,6 +226,15 @@ async fn create_recycle(
     Form(request): Form<CreateRecycleRequest>,
 ) -> Response {
     let lightning_address = request.lightning_address.trim().to_lowercase();
+
+    // Ensure user confirmed the eligibility requirements
+    if request.confirmed.as_deref() != Some("on") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>Confirmation Required</h1><p>You must confirm that you understand the eligibility requirements.</p><p><a href='/'>Go back</a></p>".to_string()),
+        )
+            .into_response();
+    }
 
     // Validate lightning address format
     if !LnurlClient::validate_lightning_address(&lightning_address) {
