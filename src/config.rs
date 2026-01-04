@@ -27,6 +27,12 @@ pub struct Config {
     /// Maximum input UTXO size in satoshis.
     /// Transactions with any input larger than this are rejected (kept as donations).
     pub max_input_sats: u64,
+    /// Admin token for accessing /admin routes. If not set, admin routes are disabled.
+    pub admin_token: Option<String>,
+    /// Rate limit: max requests per window (default: 10)
+    pub rate_limit_max_requests: u32,
+    /// Rate limit: window duration in seconds (default: 60)
+    pub rate_limit_window_secs: u64,
 }
 
 impl Config {
@@ -64,6 +70,15 @@ impl Config {
                 .unwrap_or_else(|_| DEFAULT_MAX_INPUT_SATS.to_string())
                 .parse()
                 .unwrap_or(DEFAULT_MAX_INPUT_SATS),
+            admin_token: env::var("ADMIN_TOKEN").ok(),
+            rate_limit_max_requests: env::var("RATE_LIMIT_MAX_REQUESTS")
+                .unwrap_or_else(|_| "10".to_string())
+                .parse()
+                .unwrap_or(10),
+            rate_limit_window_secs: env::var("RATE_LIMIT_WINDOW_SECS")
+                .unwrap_or_else(|_| "60".to_string())
+                .parse()
+                .unwrap_or(60),
         })
     }
 }

@@ -16,7 +16,7 @@
 
 ## Security
 
-- **No rate limiting** - The `/api/recycle` endpoint has no rate limiting. Attackers could spam address generation, bloating the database and wallet index.
+- ~~**No rate limiting** - The `/api/recycle` endpoint has no rate limiting. Attackers could spam address generation, bloating the database and wallet index.~~ **ADDRESSED:** Rate limiting added to `/confirm` and `/api/recycle` endpoints (default: 10 requests per 60 seconds per IP). Configurable via `RATE_LIMIT_MAX_REQUESTS` and `RATE_LIMIT_WINDOW_SECS`.
 
 - **Lightning address staleness** - Address is validated at recycle creation, but may become invalid by payout time (6+ confirmations later).
 
@@ -28,9 +28,9 @@
 
 - **Single Electrum server** - No fallback if personal Electrum server goes down. Service stops working entirely.
 
-- **No monitoring/alerting** - No health checks, no alerts for failures. Must watch logs manually.
+- ~~**No monitoring/alerting** - No health checks, no alerts for failures. Must watch logs manually.~~ **PARTIALLY ADDRESSED:** Added `/health` endpoint that returns DB status and last wallet sync time. Can be used for external monitoring/alerting (e.g., UptimeRobot, Fly.io health checks).
 
-- **No admin dashboard** - Can't view pending volume, Lightning balance, failed payments, or service stats without manual database queries.
+- ~~**No admin dashboard** - Can't view pending volume, Lightning balance, failed payments, or service stats without manual database queries.~~ **ADDRESSED:** Added `/admin/stats?token=<TOKEN>` endpoint that returns recycle counts by status, total deposited/paid/donated sats, and net sats. Protected by `ADMIN_TOKEN` env var.
 
 - **SQLite on single volume** - No automated backups, no replication. Fly.io volume loss = data loss.
 
@@ -73,8 +73,8 @@
 ## Priority Fixes
 
 1. Add min/max deposit limits
-2. Add rate limiting on `/api/recycle`
+2. ~~Add rate limiting on `/api/recycle`~~ ✅ Done
 3. Handle multiple deposits to same address (sum all, or refund extras)
-4. Add health check endpoint (`/health`)
-5. Add basic monitoring/alerting
+4. ~~Add health check endpoint (`/health`)~~ ✅ Done
+5. ~~Add basic monitoring/alerting~~ ✅ Done (health endpoint + admin stats)
 6. Implement database backups

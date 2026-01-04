@@ -61,6 +61,9 @@ cp .env.example .env
 | `MAX_INPUT_SATS` | No | Maximum input UTXO size in sats - larger inputs are rejected (default: `1000`) |
 | `SERVER_HOST` | No | Bind address (default: `0.0.0.0`) |
 | `SERVER_PORT` | No | Port (default: `3000`) |
+| `ADMIN_TOKEN` | No | Secret token for `/admin/stats` endpoint (disabled if not set) |
+| `RATE_LIMIT_MAX_REQUESTS` | No | Max requests per window for rate limiting (default: `10`) |
+| `RATE_LIMIT_WINDOW_SECS` | No | Rate limit window duration in seconds (default: `60`) |
 
 ### Getting an NWC URI
 
@@ -178,9 +181,39 @@ sqlite3 /data/utxo_recycler.db
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Landing page with form |
+| `POST` | `/confirm` | Eligibility confirmation page |
 | `POST` | `/api/recycle` | Create new recycle request |
 | `GET` | `/recycle/:id` | Status page (HTML) |
 | `GET` | `/api/recycle/:id` | Status (JSON) |
+| `GET` | `/health` | Health check (DB status, last sync time) |
+| `GET` | `/admin/stats?token=<TOKEN>` | Admin stats (requires `ADMIN_TOKEN`) |
+
+### Health Check
+
+```bash
+curl http://localhost:3000/health
+# {"status":"ok","db":"ok","last_sync":"2024-01-04T12:00:00Z","last_sync_ago_secs":30}
+```
+
+### Admin Stats
+
+Requires `ADMIN_TOKEN` environment variable to be set.
+
+```bash
+curl "http://localhost:3000/admin/stats?token=your-secret-token"
+# {
+#   "total_recycles": 10,
+#   "by_status": {"awaiting_deposit": 2, "confirming": 1, "paid": 5, ...},
+#   "total_deposited_sats": 50000,
+#   "total_paid_out_sats": 50500,
+#   "total_donations_sats": 1000,
+#   "net_sats": 500
+# }
+```
+
+### Rate Limiting
+
+The `/confirm` and `/api/recycle` endpoints are rate-limited to prevent abuse. Default: 10 requests per 60 seconds per IP. Configure via `RATE_LIMIT_MAX_REQUESTS` and `RATE_LIMIT_WINDOW_SECS`.
 
 ## How It Works
 
