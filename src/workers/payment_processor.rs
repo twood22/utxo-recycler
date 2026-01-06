@@ -5,6 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 
+/// Maximum payment attempts before marking as failed.
+/// After this limit, manual intervention is required.
 const MAX_PAYMENT_ATTEMPTS: u32 = 10;
 
 pub async fn run_payment_processor(state: Arc<AppState>) {
@@ -24,6 +26,17 @@ async fn process_confirmed_recycles(state: &AppState) -> anyhow::Result<()> {
     let confirmed = RecycleRepository::find_by_status(&state.db, RecycleStatus::Confirmed).await?;
 
     for recycle in confirmed {
+        // Check if we've exceeded max attempts
+        if recycle.payment_attempts >= MAX_PAYMENT_ATTEMPTS {
+            tracing::error!(
+                "Recycle {} has exceeded {} payment attempts - marking as failed",
+                recycle.id,
+                MAX_PAYMENT_ATTEMPTS
+            );
+            RecycleRepository::mark_failed(&state.db, &recycle.id).await?;
+            continue;
+        }
+
         let deposit_amount = match recycle.deposit_amount_sats {
             Some(amount) => amount,
             None => {
@@ -36,11 +49,16 @@ async fn process_confirmed_recycles(state: &AppState) -> anyhow::Result<()> {
         let payout_amount = (deposit_amount as f64 * state.config.payout_multiplier) as u64;
 
         tracing::info!(
-            "Processing payout for recycle {}: {} sats deposit -> {} sats payout",
+            "Processing payout for recycle {} (attempt {}/{}): {} sats deposit -> {} sats payout",
             recycle.id,
+            recycle.payment_attempts + 1,
+            MAX_PAYMENT_ATTEMPTS,
             deposit_amount,
             payout_amount
         );
+
+        // Increment attempt counter before trying payment
+        let attempts = RecycleRepository::increment_payment_attempts(&state.db, &recycle.id).await?;
 
         // Get invoice from lightning address
         let lnurl_client = LnurlClient::new();
@@ -51,11 +69,12 @@ async fn process_confirmed_recycles(state: &AppState) -> anyhow::Result<()> {
             Ok(inv) => inv,
             Err(e) => {
                 tracing::error!(
-                    "Failed to get invoice for recycle {}: {}",
+                    "Failed to get invoice for recycle {} (attempt {}): {}",
                     recycle.id,
+                    attempts,
                     e
                 );
-                // Don't mark as failed, will retry on next loop
+                // Will retry on next loop (up to MAX_PAYMENT_ATTEMPTS)
                 continue;
             }
         };
@@ -81,9 +100,14 @@ async fn process_confirmed_recycles(state: &AppState) -> anyhow::Result<()> {
                 .await?;
             }
             Err(e) => {
-                tracing::warn!("Payment attempt failed for recycle {}: {} (will retry)", recycle.id, e);
-                // Don't mark as failed - will retry on next loop
-                // The recycle stays in "confirmed" status
+                tracing::warn!(
+                    "Payment attempt {}/{} failed for recycle {}: {}",
+                    attempts,
+                    MAX_PAYMENT_ATTEMPTS,
+                    recycle.id,
+                    e
+                );
+                // Will retry on next loop (up to MAX_PAYMENT_ATTEMPTS)
             }
         }
     }

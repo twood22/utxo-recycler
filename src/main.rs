@@ -69,27 +69,32 @@ async fn main() -> anyhow::Result<()> {
     sqlx::query(include_str!("../migrations/001_initial.sql"))
         .execute(&db)
         .await?;
-    // Run migration 002 - adds blockheight cutoff and input size columns
-    // Each statement is run individually to handle SQLite ALTER TABLE limitations
-    let migration_002 = include_str!("../migrations/002_blockheight_cutoff.sql");
-    for statement in migration_002.split(';') {
-        // Remove comments and whitespace
-        let cleaned: String = statement
-            .lines()
-            .filter(|line| !line.trim().starts_with("--"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let cleaned = cleaned.trim();
+    // Run migrations - each statement individually to handle SQLite ALTER TABLE limitations
+    let migrations = [
+        ("002", include_str!("../migrations/002_blockheight_cutoff.sql")),
+        ("003", include_str!("../migrations/003_payment_attempts.sql")),
+    ];
 
-        if cleaned.is_empty() {
-            continue;
-        }
+    for (name, migration) in migrations {
+        for statement in migration.split(';') {
+            // Remove comments and whitespace
+            let cleaned: String = statement
+                .lines()
+                .filter(|line| !line.trim().starts_with("--"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let cleaned = cleaned.trim();
 
-        if let Err(e) = sqlx::query(cleaned).execute(&db).await {
-            let err_str = e.to_string();
-            // Ignore "duplicate column" and "already exists" errors
-            if !err_str.contains("duplicate column") && !err_str.contains("already exists") {
-                tracing::warn!("Migration statement failed (may be expected): {}", e);
+            if cleaned.is_empty() {
+                continue;
+            }
+
+            if let Err(e) = sqlx::query(cleaned).execute(&db).await {
+                let err_str = e.to_string();
+                // Ignore "duplicate column" and "already exists" errors
+                if !err_str.contains("duplicate column") && !err_str.contains("already exists") {
+                    tracing::warn!("Migration {} statement failed (may be expected): {}", name, e);
+                }
             }
         }
     }

@@ -20,7 +20,7 @@
 
 - **Lightning address staleness** - Address is validated at recycle creation, but may become invalid by payout time (6+ confirmations later).
 
-- **NWC "assume success" behavior** - If NWC response isn't received, payment is assumed successful. If it actually failed, user loses funds. Consider balance reconciliation.
+- ~~**NWC "assume success" behavior**~~ **ADDRESSED:** NWC now returns an error when no response is received instead of assuming success. Payment processor retries up to `MAX_PAYMENT_ATTEMPTS` (10) before marking as failed.
 
 - **NWC URI is a hot key** - The NWC connection string grants payment permissions. Server compromise = wallet drain.
 
@@ -28,7 +28,7 @@
 
 - **Single Electrum server** - No fallback if personal Electrum server goes down. Service stops working entirely.
 
-- ~~**No monitoring/alerting** - No health checks, no alerts for failures. Must watch logs manually.~~ **PARTIALLY ADDRESSED:** Added `/health` endpoint that returns DB status and last wallet sync time. Can be used for external monitoring/alerting (e.g., UptimeRobot, Fly.io health checks).
+- ~~**No monitoring/alerting** - No health checks, no alerts for failures. Must watch logs manually.~~ **ADDRESSED:** Added `/health` endpoint that returns DB status and last wallet sync time. Fly.io health checks configured in `fly.toml` to auto-restart unhealthy instances.
 
 - ~~**No admin dashboard** - Can't view pending volume, Lightning balance, failed payments, or service stats without manual database queries.~~ **ADDRESSED:** Added `/admin/stats?token=<TOKEN>` endpoint that returns recycle counts by status, total deposited/paid/donated sats, and net sats. Protected by `ADMIN_TOKEN` env var.
 
@@ -72,9 +72,10 @@
 
 ## Priority Fixes
 
-1. Add min/max deposit limits
-2. ~~Add rate limiting on `/api/recycle`~~ ✅ Done
-3. Handle multiple deposits to same address (sum all, or refund extras)
-4. ~~Add health check endpoint (`/health`)~~ ✅ Done
-5. ~~Add basic monitoring/alerting~~ ✅ Done (health endpoint + admin stats)
-6. Implement database backups
+1. ~~Add rate limiting on `/api/recycle`~~ ✅ Done
+2. ~~Add health check endpoint (`/health`)~~ ✅ Done
+3. ~~Add basic monitoring/alerting~~ ✅ Done (health endpoint + admin stats)
+4. ~~Fix NWC "assume success"~~ ✅ Done (returns error, payment processor retries with limit)
+5. ~~Configure Fly.io health checks~~ ✅ Done
+6. Implement database backups (Litestream)
+7. Add Terms of Service page
