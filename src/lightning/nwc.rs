@@ -151,13 +151,9 @@ impl NwcClient {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
-        // If we sent the request successfully but didn't get a response,
-        // the payment likely went through. Return success with a note.
-        // This is safer than failing and retrying (which could double-pay).
-        tracing::warn!("No NWC response received after 5 attempts - assuming payment succeeded");
-        Ok(PaymentResult {
-            preimage: format!("unconfirmed-{}", event_id),
-            payment_hash: event_id.to_string(),
-        })
+        // No response received - return an error so the payment processor can decide
+        // whether to retry. Do NOT assume success as this could cause fund loss.
+        tracing::warn!("No NWC response received after 5 attempts for event {}", event_id);
+        Err(anyhow!("No response from wallet after 5 attempts (event_id: {}). Payment status unknown - will retry.", event_id))
     }
 }

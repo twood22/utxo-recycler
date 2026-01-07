@@ -68,6 +68,7 @@ pub struct RecycleRow {
     pub payout_amount_sats: Option<i64>,
     pub payment_preimage: Option<String>,
     pub payment_hash: Option<String>,
+    pub payment_attempts: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
     pub paid_at: Option<String>,
@@ -94,6 +95,8 @@ pub struct Recycle {
     pub payout_amount_sats: Option<u64>,
     pub payment_preimage: Option<String>,
     pub payment_hash: Option<String>,
+    /// Number of payment attempts made
+    pub payment_attempts: u32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub paid_at: Option<DateTime<Utc>>,
@@ -117,6 +120,7 @@ impl From<RecycleRow> for Recycle {
             payout_amount_sats: row.payout_amount_sats.map(|v| v as u64),
             payment_preimage: row.payment_preimage,
             payment_hash: row.payment_hash,
+            payment_attempts: row.payment_attempts.unwrap_or(0) as u32,
             created_at: DateTime::parse_from_rfc3339(&row.created_at)
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(|_| Utc::now()),
@@ -357,6 +361,34 @@ impl RecycleRepository {
         .await?;
 
         Ok(())
+    }
+
+    /// Increment payment attempts counter and return new count.
+    /// Used to enforce MAX_PAYMENT_ATTEMPTS limit.
+    pub async fn increment_payment_attempts(pool: &SqlitePool, id: &str) -> anyhow::Result<u32> {
+        let now = Utc::now().to_rfc3339();
+
+        sqlx::query(
+            r#"
+            UPDATE recycles
+            SET payment_attempts = COALESCE(payment_attempts, 0) + 1, updated_at = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(&now)
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+        // Fetch the new count
+        let row: (i64,) = sqlx::query_as(
+            "SELECT COALESCE(payment_attempts, 0) FROM recycles WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(row.0 as u32)
     }
 
     pub async fn get_next_address_index(pool: &SqlitePool) -> anyhow::Result<u32> {
