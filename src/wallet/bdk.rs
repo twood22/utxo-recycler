@@ -278,4 +278,125 @@ impl BdkWallet {
         })
         .await?
     }
+
+    /// Get the maximum creation block height of input UTXOs.
+    /// This checks when the INPUT UTXOs were originally created (confirmed),
+    /// NOT when the deposit transaction was confirmed.
+    /// Used to verify UTXOs existed before the cutoff block.
+    pub async fn get_max_input_creation_height(&self, txid_str: &str) -> Result<Option<u32>> {
+        let electrum_url = self.electrum_url.clone();
+        let tor_proxy = self.tor_proxy.clone();
+        let txid_string = txid_str.to_string();
+
+        tokio::task::spawn_blocking(move || -> Result<Option<u32>> {
+            let config = if let Some(ref proxy) = tor_proxy {
+                ConfigBuilder::new()
+                    .socks5(Some(Socks5Config {
+                        addr: proxy.clone(),
+                        credentials: None,
+                    }))
+                    .timeout(Some(30))
+                    .build()
+            } else {
+                ConfigBuilder::new()
+                    .timeout(Some(30))
+                    .build()
+            };
+
+            let client = Client::from_config(&electrum_url, config)?;
+
+            // Parse the txid
+            let txid = match Txid::from_str(&txid_string) {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!("Failed to parse txid {}: {}", txid_string, e);
+                    return Ok(None);
+                }
+            };
+
+            // Fetch the deposit transaction
+            let tx = match client.transaction_get(&txid) {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!("Failed to fetch transaction {}: {}", txid_string, e);
+                    return Ok(None);
+                }
+            };
+
+            let mut max_creation_height: u32 = 0;
+
+            // For each input, find when the parent UTXO was created
+            for input in tx.input.iter() {
+                let prev_txid = input.previous_output.txid;
+                let prev_vout = input.previous_output.vout as usize;
+
+                // Fetch the previous transaction to get the output script
+                let prev_tx = match client.transaction_get(&prev_txid) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to fetch parent tx {} for input: {}",
+                            prev_txid,
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                // Get the output script that was spent
+                let output = match prev_tx.output.get(prev_vout) {
+                    Some(o) => o,
+                    None => {
+                        tracing::warn!("Output {} not found in tx {}", prev_vout, prev_txid);
+                        continue;
+                    }
+                };
+
+                // Get history for this script to find the block height
+                let script = &output.script_pubkey;
+                let history = match client.script_get_history(script) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to get script history for parent tx {}: {}",
+                            prev_txid,
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                // Find our parent transaction in the history
+                for entry in history {
+                    if entry.tx_hash == prev_txid && entry.height > 0 {
+                        let height = entry.height as u32;
+                        tracing::debug!(
+                            "Input UTXO {}:{} was created in block {}",
+                            prev_txid,
+                            prev_vout,
+                            height
+                        );
+                        if height > max_creation_height {
+                            max_creation_height = height;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if max_creation_height == 0 && !tx.input.is_empty() {
+                tracing::warn!("Could not determine input creation heights for tx {}", txid_string);
+                return Ok(None);
+            }
+
+            tracing::info!(
+                "Max input UTXO creation height for tx {}: block {}",
+                txid_string,
+                max_creation_height
+            );
+
+            Ok(Some(max_creation_height))
+        })
+        .await?
+    }
 }

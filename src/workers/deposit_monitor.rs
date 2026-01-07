@@ -74,23 +74,48 @@ async fn check_deposits(state: &AppState) -> anyhow::Result<()> {
                 match recycle.status {
                     RecycleStatus::AwaitingDeposit => {
                         // First time seeing this deposit - check eligibility
-                        if let Some(block_height) = deposit.block_height {
-                            // Check 1: Block height cutoff
-                            if block_height >= state.config.cutoff_block_height {
-                                tracing::info!(
-                                    "Recycle {} deposit at block {} is AFTER cutoff {} - marking as donation",
-                                    recycle.id,
-                                    block_height,
-                                    state.config.cutoff_block_height
+                        if let Some(deposit_block_height) = deposit.block_height {
+                            // Check 1: Block height cutoff - check when INPUT UTXOs were created
+                            // (not when the deposit tx was confirmed)
+                            let input_creation_height = state
+                                .wallet
+                                .get_max_input_creation_height(&deposit.txid)
+                                .await?;
+
+                            if let Some(creation_height) = input_creation_height {
+                                if creation_height >= state.config.cutoff_block_height {
+                                    tracing::info!(
+                                        "Recycle {} input UTXO created at block {} is AFTER cutoff {} - marking as donation",
+                                        recycle.id,
+                                        creation_height,
+                                        state.config.cutoff_block_height
+                                    );
+                                    RecycleRepository::update_as_donation(
+                                        &state.db,
+                                        &recycle.id,
+                                        &deposit.txid,
+                                        deposit.amount_sats,
+                                        Some(creation_height),
+                                        None,
+                                        "block_height",
+                                    )
+                                    .await?;
+                                    continue;
+                                }
+                            } else {
+                                // Couldn't determine input creation height - be conservative, reject
+                                tracing::warn!(
+                                    "Recycle {} - couldn't verify input UTXO creation height, marking as donation",
+                                    recycle.id
                                 );
                                 RecycleRepository::update_as_donation(
                                     &state.db,
                                     &recycle.id,
                                     &deposit.txid,
                                     deposit.amount_sats,
-                                    Some(block_height),
+                                    Some(deposit_block_height),
                                     None,
-                                    "block_height",
+                                    "block_height_unknown",
                                 )
                                 .await?;
                                 continue;
@@ -111,7 +136,7 @@ async fn check_deposits(state: &AppState) -> anyhow::Result<()> {
                                         &recycle.id,
                                         &deposit.txid,
                                         deposit.amount_sats,
-                                        Some(block_height),
+                                        input_creation_height,
                                         Some(max_input_value),
                                         "input_too_large",
                                     )
@@ -121,9 +146,9 @@ async fn check_deposits(state: &AppState) -> anyhow::Result<()> {
 
                                 // Both checks passed - eligible for payout
                                 tracing::info!(
-                                    "Recycle {} passed all checks (block {}, max input {} sats) - eligible for payout",
+                                    "Recycle {} passed all checks (input UTXO from block {}, max input {} sats) - eligible for payout",
                                     recycle.id,
-                                    block_height,
+                                    input_creation_height.unwrap_or(0),
                                     max_input_value
                                 );
                                 RecycleRepository::update_deposit_detected(
@@ -132,7 +157,7 @@ async fn check_deposits(state: &AppState) -> anyhow::Result<()> {
                                     &deposit.txid,
                                     deposit.amount_sats,
                                     deposit.confirmations,
-                                    Some(block_height),
+                                    input_creation_height,
                                     Some(max_input_value),
                                     state.config.required_confirmations,
                                 )
@@ -149,7 +174,7 @@ async fn check_deposits(state: &AppState) -> anyhow::Result<()> {
                                     &deposit.txid,
                                     deposit.amount_sats,
                                     deposit.confirmations,
-                                    Some(block_height),
+                                    input_creation_height,
                                     None,
                                     state.config.required_confirmations,
                                 )
@@ -180,30 +205,37 @@ async fn check_deposits(state: &AppState) -> anyhow::Result<()> {
                     }
                     RecycleStatus::Confirming => {
                         // Check if we now have block height info (tx just confirmed)
-                        if let Some(block_height) = deposit.block_height {
+                        if deposit.block_height.is_some() {
                             // Check if we've already determined eligibility
                             if recycle.deposit_block_height.is_none() {
-                                // First time seeing block height - run full eligibility checks
+                                // First time confirmed - run full eligibility checks
+                                // Check when INPUT UTXOs were created (not deposit tx)
+                                let input_creation_height = state
+                                    .wallet
+                                    .get_max_input_creation_height(&deposit.txid)
+                                    .await?;
 
                                 // Check 1: Block height cutoff
-                                if block_height >= state.config.cutoff_block_height {
-                                    tracing::info!(
-                                        "Recycle {} deposit at block {} is AFTER cutoff {} - marking as donation",
-                                        recycle.id,
-                                        block_height,
-                                        state.config.cutoff_block_height
-                                    );
-                                    RecycleRepository::update_as_donation(
-                                        &state.db,
-                                        &recycle.id,
-                                        &deposit.txid,
-                                        deposit.amount_sats,
-                                        Some(block_height),
-                                        None,
-                                        "block_height",
-                                    )
-                                    .await?;
-                                    continue;
+                                if let Some(creation_height) = input_creation_height {
+                                    if creation_height >= state.config.cutoff_block_height {
+                                        tracing::info!(
+                                            "Recycle {} input UTXO created at block {} is AFTER cutoff {} - marking as donation",
+                                            recycle.id,
+                                            creation_height,
+                                            state.config.cutoff_block_height
+                                        );
+                                        RecycleRepository::update_as_donation(
+                                            &state.db,
+                                            &recycle.id,
+                                            &deposit.txid,
+                                            deposit.amount_sats,
+                                            Some(creation_height),
+                                            None,
+                                            "block_height",
+                                        )
+                                        .await?;
+                                        continue;
+                                    }
                                 }
 
                                 // Check 2: Input UTXO sizes
@@ -221,7 +253,7 @@ async fn check_deposits(state: &AppState) -> anyhow::Result<()> {
                                             &recycle.id,
                                             &deposit.txid,
                                             deposit.amount_sats,
-                                            Some(block_height),
+                                            input_creation_height,
                                             Some(max_input_value),
                                             "input_too_large",
                                         )
