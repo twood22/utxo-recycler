@@ -32,9 +32,10 @@ RUN apt-get update && apt-get install -y ca-certificates tor netcat-openbsd && r
 # Copy binary from builder
 COPY --from=builder /app/target/release/utxo-recycler /app/utxo-recycler
 
-# Copy templates and migrations
+# Copy templates, migrations, and static files
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/migrations ./migrations
+COPY static ./static
 
 # Copy startup script
 COPY start.sh /app/start.sh
